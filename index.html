@@ -1,668 +1,1434 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
-<head>
-    <!-- 1. 編碼宣告：必須放在第一行，防止亂碼 -->
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>PaddlePlanner - 龍舟排位神器</title>
-    
-    <!-- 2. 引入核心庫 (React, ReactDOM, Babel, Tailwind) -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>PaddlePlanner - 戰術畫布 V20</title>
+    <script
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
+      crossorigin
+    ></script>
+    <script
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+      crossorigin
+    ></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    
     <style>
-        /* 禁止選取文字，提升 App 操作手感 */
-        .select-none { user-select: none; -webkit-user-select: none; }
-        /* 隱藏捲軸 */
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        /* 安全區域 (iPhone Home Bar) */
-        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+      .select-none {
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+      .pb-safe {
+        padding-bottom: env(safe-area-inset-bottom);
+      }
+      /* Range Slider */
+      input[type="range"] {
+        -webkit-appearance: none;
+        width: 100%;
+        background: transparent;
+      }
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        height: 20px;
+        width: 20px;
+        border-radius: 50%;
+        background: #3b82f6;
+        cursor: pointer;
+        margin-top: -8px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      }
+      input[type="range"]::-webkit-slider-runnable-track {
+        width: 100%;
+        height: 4px;
+        cursor: pointer;
+        background: #4b5563;
+        border-radius: 2px;
+      }
     </style>
-</head>
-<body class="bg-gray-50 text-gray-900 overflow-hidden">
-    <div id="root"></div>
-
-    <!-- 3. 主程式邏輯 -->
+  </head>
+  <body class="bg-gray-900 text-gray-100 overflow-hidden fixed inset-0">
+    <div id="root" class="h-full w-full"></div>
     <script type="text/babel" data-presets="react,env">
-        const { useState, useEffect, useRef } = React;
+      const { useState, useEffect, useRef, useMemo } = React;
 
-        // --- 圖示組件 (SVG Icons) ---
-        const IconBase = ({ children, size = 24, className = "" }) => (
-            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>
+      // --- Icons ---
+      const Icon = ({ children, size = 14, className = "" }) => (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width={size}
+          height={size}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={className}
+        >
+          {children}
+        </svg>
+      );
+
+      const CopyIcon = (p) => (
+        <Icon {...p}>
+          <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+          <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+        </Icon>
+      );
+      const Plus = (p) => (
+        <Icon {...p}>
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </Icon>
+      );
+      const Trash2 = (p) => (
+        <Icon {...p}>
+          <path d="M3 6h18" />
+          <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+          <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+          <line x1="10" x2="10" y1="11" y2="17" />
+          <line x1="14" x2="14" y1="11" y2="17" />
+        </Icon>
+      );
+      const ArrowUp = (p) => (
+        <Icon {...p}>
+          <path d="m5 12 7-7 7 7" />
+          <path d="M12 19V5" />
+        </Icon>
+      );
+      const ArrowDown = (p) => (
+        <Icon {...p}>
+          <path d="M12 5v14" />
+          <path d="m19 12-7 7-7-7" />
+        </Icon>
+      );
+      const ChevronUp = (p) => (
+        <Icon {...p}>
+          <path d="m18 15-6-6-6 6" />
+        </Icon>
+      );
+      const ChevronDown = (p) => (
+        <Icon {...p}>
+          <path d="m6 9 6 6 6-6" />
+        </Icon>
+      );
+      const ClipboardCopy = (p) => (
+        <Icon {...p}>
+          <rect width="8" height="4" x="8" y="2" rx="1" ry="1" />
+          <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+        </Icon>
+      );
+      const AlertTriangle = (p) => (
+        <Icon {...p}>
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </Icon>
+      );
+      const X = (p) => (
+        <Icon {...p}>
+          <path d="M18 6 6 18" />
+          <path d="m6 6 18 18" />
+        </Icon>
+      );
+      const Check = (p) => (
+        <Icon {...p}>
+          <path d="M20 6 9 17l-5-5" />
+        </Icon>
+      );
+      const FileSpreadsheet = (p) => (
+        <Icon {...p}>
+          <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+          <polyline points="14 2 14 8 20 8" />
+          <path d="M8 13h2" />
+          <path d="M8 17h2" />
+          <path d="M14 13h2" />
+          <path d="M14 17h2" />
+        </Icon>
+      );
+      const ZoomIn = (p) => (
+        <Icon {...p}>
+          <circle cx="11" cy="11" r="8" />
+          <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          <line x1="11" y1="8" x2="11" y2="14" />
+          <line x1="8" y1="11" x2="14" y2="11" />
+        </Icon>
+      );
+      const ZoomOut = (p) => (
+        <Icon {...p}>
+          <circle cx="11" cy="11" r="8" />
+          <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          <line x1="8" y1="11" x2="14" y2="11" />
+        </Icon>
+      );
+      const Eye = (p) => (
+        <Icon {...p}>
+          <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+          <circle cx="12" cy="12" r="3" />
+        </Icon>
+      );
+      const EyeOff = (p) => (
+        <Icon {...p}>
+          <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+          <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+          <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+          <line x1="2" x2="22" y1="2" y2="22" />
+        </Icon>
+      );
+      const Camera = (p) => (
+        <Icon {...p}>
+          <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+          <circle cx="12" cy="13" r="3" />
+        </Icon>
+      );
+      const Save = (p) => (
+        <Icon {...p}>
+          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+          <polyline points="17 21 17 13 7 13 7 21" />
+          <polyline points="7 3 7 8 15 8" />
+        </Icon>
+      );
+      const FolderOpen = (p) => (
+        <Icon {...p}>
+          <path d="m6 14 1.45-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-3.25 7a2 2 0 0 1-1.94 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.6a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2" />
+        </Icon>
+      );
+
+      // --- Data: Updated Roster (V18 User Provided) ---
+      const INITIAL_ROSTER = [
+        { id: "01", name: "比爾", gender: "M", side: "R", weight: 0 },
+        { id: "02", name: "Jane", gender: "F", side: "L", weight: 0 },
+        { id: "03", name: "小man", gender: "F", side: "L", weight: 0 },
+        { id: "04", name: "俞璇", gender: "F", side: "L", weight: 0 },
+        { id: "05", name: "Charlie", gender: "M", side: "L", weight: 0 },
+        { id: "06", name: "Dennis", gender: "M", side: "L", weight: 0 },
+        { id: "07", name: "Peter", gender: "M", side: "L", weight: 0 },
+        { id: "08", name: "Chiaki", gender: "F", side: "R", weight: 0 },
+        { id: "09", name: "Eva", gender: "F", side: "R", weight: 0 },
+        { id: "10", name: "Peng", gender: "F", side: "R", weight: 0 },
+        { id: "11", name: "宛臻", gender: "F", side: "R", weight: 0 },
+        { id: "12", name: "鍾悅", gender: "F", side: "R", weight: 0 },
+        { id: "13", name: "Kyle", gender: "M", side: "R", weight: 0 },
+        { id: "14", name: "Sun", gender: "M", side: "R", weight: 0 },
+        { id: "15", name: "仁彥", gender: "M", side: "R", weight: 0 },
+        { id: "16", name: "宓謙", gender: "M", side: "B", weight: 0 },
+        { id: "17", name: "明澤", gender: "M", side: "R", weight: 0 },
+        { id: "18", name: "阿書", gender: "M", side: "R", weight: 0 },
+        { id: "19", name: "阿賢", gender: "M", side: "R", weight: 0 },
+        { id: "20", name: "政志", gender: "M", side: "R", weight: 0 },
+        { id: "21", name: "猴子", gender: "M", side: "R", weight: 0 },
+        { id: "22", name: "德融", gender: "M", side: "B", weight: 0 },
+        { id: "23", name: "Maggie", gender: "F", side: "R", weight: 0 },
+        { id: "24", name: "Allie", gender: "F", side: "R", weight: 0 },
+        { id: "25", name: "家綾", gender: "F", side: "R", weight: 0 },
+        { id: "26", name: "Well", gender: "F", side: "L", weight: 0 },
+        { id: "27", name: "姿希", gender: "F", side: "L", weight: 0 },
+        { id: "28", name: "Monkey", gender: "F", side: "L", weight: 0 },
+        { id: "29", name: "Sean", gender: "M", side: "L", weight: 0 },
+        { id: "30", name: "小二", gender: "F", side: "L", weight: 0 },
+        { id: "31", name: "馬尼", gender: "F", side: "R", weight: 0 },
+        { id: "32", name: "丞宥", gender: "M", side: "R", weight: 0 },
+        { id: "33", name: "Claire", gender: "F", side: "R", weight: 0 },
+        { id: "34", name: "Olivia", gender: "F", side: "L", weight: 0 },
+        { id: "35", name: "Amber", gender: "F", side: "L", weight: 0 },
+        { id: "36", name: "寶玲", gender: "F", side: "R", weight: 0 },
+        { id: "37", name: "小蔡", gender: "M", side: "L", weight: 0 },
+        { id: "38", name: "晉瑋", gender: "M", side: "R", weight: 0 },
+        { id: "39", name: "民翰", gender: "M", side: "L", weight: 0 },
+        { id: "40", name: "思翰Hans", gender: "M", side: "L", weight: 0 },
+        { id: "41", name: "宗霖", gender: "M", side: "L", weight: 0 },
+        { id: "42", name: "叢例", gender: "M", side: "L", weight: 0 },
+        { id: "43", name: "昱承", gender: "M", side: "L", weight: 0 },
+        { id: "44", name: "Megan", gender: "F", side: "L", weight: 0 },
+        { id: "45", name: "湘南", gender: "M", side: "L", weight: 0 },
+        { id: "46", name: "小馬", gender: "M", side: "L", weight: 0 },
+        { id: "47", name: "Joe", gender: "M", side: "R", weight: 0 },
+        { id: "48", name: "君君", gender: "F", side: "R", weight: 0 },
+      ];
+      const EMPTY_BOAT = {
+        drummer: null,
+        steers: null,
+        left: Array(10).fill(null),
+        right: Array(10).fill(null),
+      };
+      const DEFAULT_LINEUP = {
+        id: "default",
+        name: "組合一",
+        boat: EMPTY_BOAT,
+        size: "large",
+      };
+
+      // --- Helper Components ---
+      const PlayerCard = ({
+        player,
+        isSelected,
+        onClick,
+        context = "bench",
+        isUsedInActiveBoat = false,
+        showWeights = true,
+      }) => {
+        return (
+          <div
+            onClick={onClick}
+            className={` relative flex items-center justify-between px-1 rounded border transition-all cursor-pointer select-none overflow-hidden h-[20px] ${
+              isUsedInActiveBoat && context === "bench"
+                ? "opacity-30 bg-gray-100 grayscale border-gray-100"
+                : ""
+            } ${
+              isSelected
+                ? "border-blue-500 bg-blue-100 ring-2 ring-blue-300 z-10"
+                : "border-gray-200 bg-white hover:border-gray-300"
+            } active:scale-95 `}
+          >
+            <div className="flex items-center gap-1 overflow-hidden flex-1 h-full">
+              <div
+                className={`w-1 h-full shrink-0 ${
+                  player.side === "L"
+                    ? "bg-blue-500"
+                    : player.side === "R"
+                    ? "bg-red-500"
+                    : "bg-purple-500"
+                }`}
+              ></div>
+              <span className="font-bold truncate text-gray-800 text-[10px] leading-none pt-[1px]">
+                {player.name}
+              </span>
+            </div>
+            {showWeights && (
+              <div className="flex items-center gap-0.5 shrink-0 pl-1">
+                <div
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    player.gender === "F" ? "bg-pink-400" : "bg-blue-400"
+                  }`}
+                ></div>
+                <span className="text-[9px] font-bold text-gray-400 leading-none">
+                  {player.weight}
+                </span>
+              </div>
+            )}
+          </div>
         );
-        const Copy = (p) => <IconBase {...p}><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></IconBase>;
-        const Plus = (p) => <IconBase {...p}><path d="M5 12h14"/><path d="M12 5v14"/></IconBase>;
-        const Trash2 = (p) => <IconBase {...p}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></IconBase>;
-        const ArrowUp = (p) => <IconBase {...p}><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></IconBase>;
-        const ArrowDown = (p) => <IconBase {...p}><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></IconBase>;
-        const ChevronUp = (p) => <IconBase {...p}><path d="m18 15-6-6-6 6"/></IconBase>;
-        const ChevronDown = (p) => <IconBase {...p}><path d="m6 9 6 6 6-6"/></IconBase>;
-        const ClipboardCopy = (p) => <IconBase {...p}><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></IconBase>;
-        const AlertTriangle = (p) => <IconBase {...p}><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></IconBase>;
-        const X = (p) => <IconBase {...p}><path d="M18 6 6 18"/><path d="m6 6 18 18"/></IconBase>;
-        const Check = (p) => <IconBase {...p}><path d="M20 6 9 17l-5-5"/></IconBase>;
-        const FileSpreadsheet = (p) => <IconBase {...p}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M8 13h2"/><path d="M8 17h2"/><path d="M14 13h2"/><path d="M14 17h2"/></IconBase>;
-        
-        // --- 預設資料 (初始化用) ---
-        const INITIAL_ROSTER = [
-            { id: "01", name: "阿翔", gender: "M", side: "L", weight: 72 },
-            { id: "02", name: "小黑", gender: "M", side: "R", weight: 75 },
-            { id: "03", name: "莎莎", gender: "F", side: "L", weight: 60 },
-            { id: "04", name: "咪咪", gender: "F", side: "R", weight: 58 },
-            { id: "05", name: "巨石", gender: "M", side: "L", weight: 98 },
-            { id: "06", name: "鐵牛", gender: "M", side: "R", weight: 95 },
-            { id: "07", name: "館長", gender: "M", side: "L", weight: 105 },
-            { id: "08", name: "浩克", gender: "M", side: "R", weight: 102 },
-            { id: "09", name: "大熊", gender: "M", side: "L", weight: 90 },
-            { id: "10", name: "胖虎", gender: "M", side: "R", weight: 92 },
-            { id: "11", name: "神力", gender: "F", side: "L", weight: 70 },
-            { id: "12", name: "女超", gender: "F", side: "R", weight: 72 },
-            { id: "13", name: "阿嘎", gender: "M", side: "L", weight: 82 },
-            { id: "14", name: "小馬", gender: "M", side: "R", weight: 80 },
-            { id: "15", name: "飛哥", gender: "M", side: "L", weight: 78 },
-            { id: "16", name: "阿傑", gender: "M", side: "R", weight: 77 },
-            { id: "17", name: "建國", gender: "M", side: "L", weight: 85 },
-            { id: "18", name: "志明", gender: "M", side: "R", weight: 84 },
-            { id: "19", name: "春嬌", gender: "F", side: "L", weight: 62 },
-            { id: "20", "name": "阿美", gender: "F", side: "R", weight: 65 },
-            { id: "21", "name": "婷婷", gender: "F", side: "L", weight: 59 },
-            { id: "22", "name": "萱萱", gender: "F", side: "R", weight: 61 },
-            { id: "23", "name": "老王", gender: "M", side: "L", weight: 88 },
-            { id: "24", "name": "小陳", gender: "M", side: "R", weight: 86 },
-            { id: "25", "name": "林董", gender: "M", side: "L", weight: 83 },
-            { id: "26", "name": "張哥", gender: "M", side: "R", weight: 81 },
-            { id: "27", "name": "莉莉", gender: "F", side: "L", weight: 63 },
-            { id: "28", "name": "真真", gender: "F", side: "R", weight: 64 },
-            { id: "29", "name": "水鬼", gender: "M", side: "L", weight: 76 },
-            { id: "30", "name": "海龍", gender: "M", side: "R", weight: 75 },
-            { id: "31", "name": "阿浪", gender: "M", side: "L", weight: 74 },
-            { id: "32", "name": "水花", gender: "F", side: "R", weight: 66 },
-            { id: "33", "name": "雙修哥", gender: "M", side: "B", weight: 80 },
-            { id: "34", "name": "左右開弓", gender: "M", side: "B", weight: 78 },
-            { id: "35", "name": "萬能姐", gender: "F", side: "B", weight: 65 },
-            { id: "36", "name": "小隻馬", gender: "F", side: "B", weight: 55 },
-            { id: "37", "name": "嬌小鼓", gender: "F", side: "B", weight: 45 },
-            { id: "38", "name": "大聲公", gender: "M", side: "B", weight: 52 },
-            { id: "39", "name": "老船長", gender: "M", side: "B", weight: 85 },
-            { id: "40", "name": "穩舵手", gender: "M", side: "B", weight: 88 }
-        ];
+      };
 
-        const EMPTY_BOAT = {
-            drummer: null,
-            steers: null,
-            left: Array(10).fill(null),
-            right: Array(10).fill(null)
+      const EmptySlot = ({ label, onClick, isActive }) => (
+        <div
+          onClick={onClick}
+          className={`h-[20px] rounded border border-dashed flex items-center justify-center text-[9px] text-gray-300 font-medium transition-colors cursor-pointer ${
+            isActive
+              ? "border-blue-400 bg-blue-50 text-blue-600"
+              : "border-gray-200"
+          }`}
+        >
+          {label}
+        </div>
+      );
+
+      // --- Boat Card ---
+      const BoatCard = ({
+        lineup,
+        isActive,
+        onClick,
+        onUpdate,
+        onDelete,
+        onDuplicate,
+        onSelectSlot,
+        selectedSource,
+        onToggleSize,
+        showWeights,
+        readOnly = false,
+      }) => {
+        const [isEditingName, setIsEditingName] = useState(false);
+        const [copySuccess, setCopySuccess] = useState(false);
+        const rowCount = lineup.size === "small" ? 5 : 10;
+        const stats = useMemo(() => {
+          let leftW = 0,
+            rightW = 0,
+            maleCount = 0,
+            femaleCount = 0;
+          const processPaddler = (p, side) => {
+            if (!p) return;
+            if (side === "left") leftW += p.weight;
+            if (side === "right") rightW += p.weight;
+            if (p.gender === "M") maleCount++;
+            if (p.gender === "F") femaleCount++;
+          };
+          for (let i = 0; i < rowCount; i++) {
+            processPaddler(lineup.boat.left[i], "left");
+            processPaddler(lineup.boat.right[i], "right");
+          }
+          return {
+            leftW,
+            rightW,
+            diff: leftW - rightW,
+            maleCount,
+            femaleCount,
+          };
+        }, [lineup.boat, rowCount]);
+
+        const handleNameChange = (e) =>
+          onUpdate({ ...lineup, name: e.target.value });
+        const handleCopyList = (e) => {
+          e.stopPropagation();
+          let text = `${lineup.name} (${
+            lineup.size === "small" ? "小龍" : "大龍"
+          })\n\t鼓手：${lineup.boat.drummer?.name || ""}\t\n\n左舷\t右舷\n`;
+          for (let i = 0; i < rowCount; i++) {
+            text += `${lineup.boat.left[i]?.name || ""}\t${
+              lineup.boat.right[i]?.name || ""
+            }\n`;
+          }
+          text += `\n\t舵手：${lineup.boat.steers?.name || ""}\t\n`;
+          const ta = document.createElement("textarea");
+          ta.value = text;
+          ta.style.position = "fixed";
+          ta.style.left = "-9999px";
+          document.body.appendChild(ta);
+          ta.focus();
+          ta.select();
+          try {
+            document.execCommand("copy");
+            setCopySuccess(true);
+            setTimeout(() => setCopySuccess(false), 2000);
+          } catch (e) {}
+          document.body.removeChild(ta);
         };
 
-        const DEFAULT_LINEUP = {
-            id: 'default',
-            name: '組合一',
-            boat: EMPTY_BOAT
-        };
-
-        function App() {
-            // --- State 管理 ---
-            const [lineups, setLineups] = useState([DEFAULT_LINEUP]);
-            const [activeLineupId, setActiveLineupId] = useState('default');
-            const [roster, setRoster] = useState(INITIAL_ROSTER);
-            
-            const [isBenchOpen, setIsBenchOpen] = useState(false);
-            const [selectedSource, setSelectedSource] = useState(null);
-            const [isEditNameMode, setIsEditNameMode] = useState(false);
-            
-            // 彈窗狀態
-            const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-            const [importModalOpen, setImportModalOpen] = useState(false);
-            const [copyFeedback, setCopyFeedback] = useState(false);
-            
-            // 匯入暫存
-            const [importText, setImportText] = useState("");
-            const [importPreview, setImportPreview] = useState([]);
-
-            const currentLineup = lineups.find(l => l.id === activeLineupId) || lineups[0];
-            const boat = currentLineup.boat;
-
-            // --- 資料儲存 (LocalStorage) ---
-            useEffect(() => {
-                // 嘗試讀取存檔 (版本 v12)
-                const savedData = localStorage.getItem('paddlePlannerData_v12');
-                if (savedData) {
-                    try {
-                        const parsed = JSON.parse(savedData);
-                        if (parsed.lineups && parsed.lineups.length > 0) {
-                            setLineups(parsed.lineups);
-                            setActiveLineupId(parsed.activeLineupId || parsed.lineups[0].id);
-                        }
-                        if (parsed.roster && Array.isArray(parsed.roster)) {
-                            setRoster(parsed.roster);
-                        }
-                    } catch (e) { console.error("Load failed", e); }
-                } else {
-                    // 向後相容 v11
-                    const oldData = localStorage.getItem('paddlePlannerData_v11');
-                    if (oldData) {
-                        try {
-                            const parsed = JSON.parse(oldData);
-                            if (parsed.lineups) setLineups(parsed.lineups);
-                            if (parsed.roster) setRoster(parsed.roster);
-                        } catch(e) {}
-                    }
-                }
-            }, []);
-
-            // 資料變更時自動存檔
-            useEffect(() => {
-                localStorage.setItem('paddlePlannerData_v12', JSON.stringify({ lineups, activeLineupId, roster }));
-            }, [lineups, activeLineupId, roster]);
-
-            // --- 陣容管理邏輯 ---
-            const updateCurrentBoat = (newBoat) => {
-                setLineups(prev => prev.map(l => l.id === activeLineupId ? { ...l, boat: newBoat } : l));
-            };
-
-            const updateLineupName = (name) => {
-                setLineups(prev => prev.map(l => l.id === activeLineupId ? { ...l, name } : l));
-            };
-
-            const handleAddLineup = () => {
-                const newId = `lineup_${Date.now()}`;
-                const newLineup = { id: newId, name: `組合 ${lineups.length + 1}`, boat: EMPTY_BOAT };
-                setLineups([...lineups, newLineup]);
-                setActiveLineupId(newId);
-            };
-
-            const handleDuplicateLineup = () => {
-                const newId = `lineup_${Date.now()}`;
-                const newLineup = {
-                    id: newId,
-                    name: `${currentLineup.name} (複製)`,
-                    boat: JSON.parse(JSON.stringify(currentLineup.boat))
-                };
-                setLineups([...lineups, newLineup]);
-                setActiveLineupId(newId);
-            };
-
-            const requestDeleteLineup = () => setDeleteModalOpen(true);
-
-            const confirmDeleteLineup = () => {
-                if (lineups.length <= 1) {
-                    setDeleteModalOpen(false);
-                    return;
-                }
-                const newLineups = lineups.filter(l => l.id !== activeLineupId);
-                setLineups(newLineups);
-                setActiveLineupId(newLineups[0].id);
-                setDeleteModalOpen(false);
-            };
-
-            // --- 匯入解析邏輯 (支援空格/Tab/逗號) ---
-            const parseCSV = (text) => {
-                const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
-                const newRoster = [];
-                
-                lines.forEach((line, index) => {
-                    // 跳過標題列
-                    if (index === 0 && (line.includes("名字") || line.includes("Name")) && !line.match(/\d/)) return;
-
-                    // 分隔符號：逗號, 頓號, Tab, 直線, 分號, 或 連續空格
-                    const cols = line.split(/[,，、\t|;\s]+/).filter(c => c.trim() !== '');
-                    if (cols.length < 2) return; 
-
-                    const name = cols[0];
-                    const restOfLine = cols.slice(1).join(' ').toLowerCase();
-
-                    // 判斷位置
-                    let side = 'B'; 
-                    const isLeft = restOfLine.includes('左') || restOfLine.includes('left') || restOfLine.includes('l');
-                    const isRight = restOfLine.includes('右') || restOfLine.includes('right') || restOfLine.includes('r');
-                    const isBoth = restOfLine.includes('雙') || restOfLine.includes('both') || restOfLine.includes('b');
-                    const isSteers = restOfLine.includes('舵') || restOfLine.includes('steers');
-                    const isDrum = restOfLine.includes('鼓') || restOfLine.includes('drum');
-
-                    if (isBoth || isSteers || isDrum || (isLeft && isRight)) side = 'B';
-                    else if (isLeft) side = 'L';
-                    else if (isRight) side = 'R';
-
-                    // 判斷性別
-                    let gender = 'M';
-                    if (restOfLine.includes('女') || restOfLine.includes('f') || restOfLine.includes('woman') || restOfLine.includes('female')) {
-                        gender = 'F';
-                    }
-
-                    // 判斷體重 (抓取 20~200 之間的數字)
-                    const numbers = restOfLine.match(/\d+/g);
-                    let weight = 0;
-                    if (numbers) {
-                        const likelyWeights = numbers.map(n => parseInt(n)).filter(n => n >= 20 && n <= 200);
-                        weight = likelyWeights.length > 0 ? likelyWeights[likelyWeights.length - 1] : 0;
-                    }
-
-                    newRoster.push({
-                        id: `imported_${Date.now()}_${index}`,
-                        name,
-                        side,
-                        gender,
-                        weight
-                    });
-                });
-
-                return newRoster;
-            };
-
-            // 即時預覽效果
-            useEffect(() => {
-                if (importModalOpen && importText) {
-                    const parsed = parseCSV(importText);
-                    setImportPreview(parsed);
-                } else {
-                    setImportPreview([]);
-                }
-            }, [importText, importModalOpen]);
-
-            const handleImportSubmit = (mode) => {
-                if (importPreview.length === 0) return;
-                // 自動備份舊名單
-                localStorage.setItem('paddlePlanner_backup_roster', JSON.stringify(roster));
-
-                if (mode === 'overwrite') {
-                    updateCurrentBoat(EMPTY_BOAT);
-                    setRoster(importPreview);
-                } else {
-                    setRoster(prev => [...prev, ...importPreview]);
-                }
-
-                setImportModalOpen(false);
-                setImportText("");
-            };
-
-            // --- 複製到剪貼簿 (Excel 格式) ---
-            const handleCopyList = () => {
-                let text = "";
-                text += `\t鼓手：${boat.drummer ? boat.drummer.name : ''}\t\n\n`;
-                text += `左舷\t右舷\n`;
-                for(let i=0; i<10; i++) {
-                    const leftName = boat.left[i] ? boat.left[i].name : "";
-                    const rightName = boat.right[i] ? boat.right[i].name : "";
-                    text += `${leftName}\t${rightName}\n`;
-                }
-                text += `\n\t舵手：${boat.steers ? boat.steers.name : ''}\t\n`;
-
-                // 相容性寫法：建立隱藏 Textarea 執行 copy 指令
-                const copyToClipboardFallback = (textToCopy) => {
-                    const textArea = document.createElement("textarea");
-                    textArea.value = textToCopy;
-                    textArea.style.position = "fixed";
-                    textArea.style.left = "-9999px";
-                    textArea.style.top = "0";
-                    document.body.appendChild(textArea);
-                    textArea.focus();
-                    textArea.select();
-
-                    try {
-                        const successful = document.execCommand('copy');
-                        if (successful) {
-                            setCopyFeedback(true);
-                            setTimeout(() => setCopyFeedback(false), 2000);
-                        } else {
-                            alert("複製失敗 (瀏覽器權限阻擋)");
-                        }
-                    } catch (err) {
-                        alert("複製失敗");
-                    }
-                    document.body.removeChild(textArea);
-                };
-
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(text)
-                        .then(() => {
-                            setCopyFeedback(true);
-                            setTimeout(() => setCopyFeedback(false), 2000);
-                        })
-                        .catch(() => copyToClipboardFallback(text));
-                } else {
-                    copyToClipboardFallback(text);
-                }
-            };
-
-            // --- 統計與排序邏輯 ---
-            const getBenchPlayers = () => {
-                const boatPlayerIds = new Set();
-                if (boat.drummer) boatPlayerIds.add(boat.drummer.id);
-                if (boat.steers) boatPlayerIds.add(boat.steers.id);
-                boat.left.forEach(p => p && boatPlayerIds.add(p.id));
-                boat.right.forEach(p => p && boatPlayerIds.add(p.id));
-                
-                const bench = roster.filter(p => !boatPlayerIds.has(p.id));
-                
-                // 排序：左 -> 右 -> 雙修 (重者在前)
-                return bench.sort((a, b) => {
-                    const sideOrder = { 'L': 1, 'R': 2, 'B': 3 };
-                    if (sideOrder[a.side] !== sideOrder[b.side]) {
-                        return sideOrder[a.side] - sideOrder[b.side];
-                    }
-                    return b.weight - a.weight; 
-                });
-            };
-
-            const calculateStats = () => {
-                let leftW = 0, rightW = 0, maleCount = 0, femaleCount = 0;
-                const processPlayer = (p, side) => {
-                    if (!p) return;
-                    if (side === 'left') leftW += p.weight;
-                    if (side === 'right') rightW += p.weight;
-                    if (p.gender === 'M') maleCount++;
-                    if (p.gender === 'F') femaleCount++;
-                };
-                processPlayer(boat.drummer, 'center');
-                processPlayer(boat.steers, 'center');
-                boat.left.forEach(p => processPlayer(p, 'left'));
-                boat.right.forEach(p => processPlayer(p, 'right'));
-                return { leftW, rightW, diff: leftW - rightW, maleCount, femaleCount };
-            };
-            const stats = calculateStats();
-
-            // --- 互動邏輯 ---
-            const handleTapPlayer = (sourceType, index, side, playerData) => {
-                if (selectedSource && selectedSource.data.id === playerData.id) {
-                    setSelectedSource(null); // 取消選取
-                    return;
-                }
-                if (selectedSource) {
-                    executeMove(selectedSource, { type: sourceType, index, side, data: playerData });
-                } else {
-                    setSelectedSource({ type: sourceType, index, side, data: playerData });
-                    // 如果選了板凳的人，自動收起板凳區方便放人
-                    if (sourceType === 'roster') setIsBenchOpen(false);
-                }
-            };
-
-            const handleTapEmptySlot = (targetType, index, side) => {
-                if (selectedSource) {
-                    executeMove(selectedSource, { type: targetType, index, side, data: null });
-                }
-            };
-
-            const executeMove = (source, target) => {
-                const newBoat = JSON.parse(JSON.stringify(boat));
-                const placePlayer = (player, location) => {
-                    if (location.type === 'boat') {
-                        if (location.side === 'drummer') newBoat.drummer = player;
-                        else if (location.side === 'steers') newBoat.steers = player;
-                        else if (location.side === 'left') newBoat.left[location.index] = player;
-                        else if (location.side === 'right') newBoat.right[location.index] = player;
-                    }
-                };
-                const clearLocation = (location) => {
-                    if (location.type === 'boat') {
-                        if (location.side === 'drummer') newBoat.drummer = null;
-                        else if (location.side === 'steers') newBoat.steers = null;
-                        else if (location.side === 'left') newBoat.left[location.index] = null;
-                        else if (location.side === 'right') newBoat.right[location.index] = null;
-                    }
-                };
-                if (source.type === 'roster' && target.type === 'boat' && !target.data) {
-                    placePlayer(source.data, target);
-                } else if (source.type === 'boat' && target.type === 'boat') {
-                    const sourcePlayer = source.data;
-                    const targetPlayer = target.data;
-                    placePlayer(sourcePlayer, target);
-                    if (targetPlayer) placePlayer(targetPlayer, source);
-                    else clearLocation(source);
-                }
-                updateCurrentBoat(newBoat);
-                setSelectedSource(null);
-            };
-
-            const handleKickToBench = () => {
-                if (!selectedSource || selectedSource.type !== 'boat') return;
-                const newBoat = { ...boat };
-                if (selectedSource.side === 'drummer') newBoat.drummer = null;
-                else if (selectedSource.side === 'steers') newBoat.steers = null;
-                else if (selectedSource.side === 'left') newBoat.left[selectedSource.index] = null;
-                else if (selectedSource.side === 'right') newBoat.right[selectedSource.index] = null;
-                updateCurrentBoat(newBoat);
-                setSelectedSource(null);
-            };
-
-            // --- UI 組件 ---
-            const PlayerCard = ({ player, isSelected, onClick, context = 'bench', sideConstraint = null }) => {
-                const isConflict = context === 'boat' && sideConstraint && player.side !== 'B' && player.side !== sideConstraint;
-                
-                return (
-                    <div 
-                        onClick={onClick}
-                        className={`
-                            relative flex items-center justify-between px-1 rounded border transition-all cursor-pointer select-none overflow-hidden
-                            ${isSelected ? 'border-blue-500 bg-blue-100 shadow-sm z-10' : 'border-gray-200 bg-white hover:border-gray-300'}
-                            ${isConflict ? 'border-red-500 bg-red-50' : ''}
-                            active:scale-95
-                        `}
-                        style={{ height: '20px' }} 
+        return (
+          <div
+            onClick={!readOnly ? onClick : undefined}
+            className={` w-[280px] bg-white rounded-lg shadow-md flex-shrink-0 flex flex-col overflow-hidden border-2 transition-all duration-200 ${
+              isActive && !readOnly
+                ? "border-blue-500 ring-2 ring-blue-200"
+                : "border-transparent"
+            } ${readOnly ? "border-gray-200" : "hover:border-gray-300"} `}
+          >
+            <div
+              className={`px-2 py-2 border-b flex flex-col gap-1.5 ${
+                isActive && !readOnly ? "bg-blue-50" : "bg-gray-50"
+              }`}
+            >
+              <div className="flex justify-between items-center">
+                {isEditingName && !readOnly ? (
+                  <input
+                    autoFocus
+                    className="text-sm font-bold border rounded px-1 w-24"
+                    value={lineup.name}
+                    onChange={handleNameChange}
+                    onBlur={() => setIsEditingName(false)}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <span
+                    onClick={(e) => {
+                      if (!readOnly) {
+                        e.stopPropagation();
+                        setIsEditingName(true);
+                      }
+                    }}
+                    className="text-sm font-bold text-gray-800 border-b border-dashed border-transparent hover:border-gray-400 cursor-text truncate max-w-[150px]"
+                  >
+                    {lineup.name}
+                  </span>
+                )}
+                {!readOnly && (
+                  <div className="flex gap-1">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDuplicate(lineup.id);
+                      }}
+                      className="p-1 text-gray-500 hover:bg-white rounded"
                     >
-                        <div className="flex items-center gap-1 overflow-hidden flex-1 h-full">
-                            <div className={`
-                                w-1 h-full shrink-0
-                                ${player.side === 'L' ? 'bg-blue-500' : player.side === 'R' ? 'bg-red-500' : 'bg-purple-500'}
-                            `}></div>
-                            <span className="font-bold truncate text-gray-800 text-[11px] leading-none pt-[1px]">{player.name}</span>
-                        </div>
-                        <div className="flex items-center gap-0.5 shrink-0 pl-1">
-                            <div className={`w-1.5 h-1.5 rounded-full ${player.gender === 'F' ? 'bg-pink-400' : 'bg-blue-400'}`}></div>
-                            <span className="text-[9px] font-bold text-gray-400 leading-none">{player.weight}</span>
-                        </div>
-                        {isConflict && <AlertTriangle size={10} className="text-red-500 absolute top-0.5 right-0.5" />}
-                    </div>
-                );
+                      <CopyIcon size={12} />
+                    </button>
+                    <button
+                      onClick={handleCopyList}
+                      className={`p-1 rounded transition-colors ${
+                        copySuccess
+                          ? "text-green-600"
+                          : "text-blue-500 hover:bg-white"
+                      }`}
+                    >
+                      {copySuccess ? (
+                        <Check size={12} />
+                      ) : (
+                        <ClipboardCopy size={12} />
+                      )}
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete(lineup.id);
+                      }}
+                      className="p-1 text-red-400 hover:bg-white rounded"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-col gap-1 text-[11px] font-bold">
+                <div className="flex justify-between border-b border-gray-200 pb-1">
+                  <span className="text-blue-600">L: {stats.leftW}</span>
+                  <span
+                    className={`${
+                      Math.abs(stats.diff) > 10
+                        ? "text-red-500"
+                        : "text-gray-500"
+                    }`}
+                  >
+                    Δ {Math.abs(stats.diff)}
+                  </span>
+                  <span className="text-red-600">R: {stats.rightW}</span>
+                </div>
+                <div className="flex justify-between pt-0.5">
+                  <span className="text-blue-500">男: {stats.maleCount}</span>
+                  <span className="text-pink-500">女: {stats.femaleCount}</span>
+                </div>
+              </div>
+            </div>
+            <div className="p-2 flex-1 space-y-1 overflow-y-auto">
+              <div className="flex justify-center mb-2">
+                <div className="w-[120px]">
+                  {lineup.boat.drummer ? (
+                    <PlayerCard
+                      player={lineup.boat.drummer}
+                      isSelected={
+                        selectedSource?.data?.id === lineup.boat.drummer.id &&
+                        selectedSource?.lineupId === lineup.id
+                      }
+                      onClick={(e) => {
+                        if (!readOnly) {
+                          e.stopPropagation();
+                          onSelectSlot(
+                            lineup.id,
+                            "boat",
+                            0,
+                            "drummer",
+                            lineup.boat.drummer
+                          );
+                        }
+                      }}
+                      context="boat"
+                      showWeights={showWeights}
+                    />
+                  ) : (
+                    <EmptySlot
+                      label="鼓手"
+                      isActive={selectedSource}
+                      onClick={(e) => {
+                        if (!readOnly) {
+                          e.stopPropagation();
+                          onSelectSlot(lineup.id, "boat", 0, "drummer", null);
+                        }
+                      }}
+                    />
+                  )}
+                </div>
+              </div>
+              {Array.from({ length: rowCount }).map((_, r) => (
+                <div key={r} className="flex items-center gap-1">
+                  <div className="flex-1">
+                    {lineup.boat.left[r] ? (
+                      <PlayerCard
+                        player={lineup.boat.left[r]}
+                        isSelected={
+                          selectedSource?.data?.id === lineup.boat.left[r].id &&
+                          selectedSource?.lineupId === lineup.id
+                        }
+                        onClick={(e) => {
+                          if (!readOnly) {
+                            e.stopPropagation();
+                            onSelectSlot(
+                              lineup.id,
+                              "boat",
+                              r,
+                              "left",
+                              lineup.boat.left[r]
+                            );
+                          }
+                        }}
+                        context="boat"
+                        sideConstraint="L"
+                        showWeights={showWeights}
+                      />
+                    ) : (
+                      <EmptySlot
+                        label={`左${r + 1}`}
+                        isActive={selectedSource}
+                        onClick={(e) => {
+                          if (!readOnly) {
+                            e.stopPropagation();
+                            onSelectSlot(lineup.id, "boat", r, "left", null);
+                          }
+                        }}
+                      />
+                    )}
+                  </div>
+                  <div className="w-3 text-center text-[8px] text-gray-300 font-bold">
+                    {r + 1}
+                  </div>
+                  <div className="flex-1">
+                    {lineup.boat.right[r] ? (
+                      <PlayerCard
+                        player={lineup.boat.right[r]}
+                        isSelected={
+                          selectedSource?.data?.id ===
+                            lineup.boat.right[r].id &&
+                          selectedSource?.lineupId === lineup.id
+                        }
+                        onClick={(e) => {
+                          if (!readOnly) {
+                            e.stopPropagation();
+                            onSelectSlot(
+                              lineup.id,
+                              "boat",
+                              r,
+                              "right",
+                              lineup.boat.right[r]
+                            );
+                          }
+                        }}
+                        context="boat"
+                        sideConstraint="R"
+                        showWeights={showWeights}
+                      />
+                    ) : (
+                      <EmptySlot
+                        label={`右${r + 1}`}
+                        isActive={selectedSource}
+                        onClick={(e) => {
+                          if (!readOnly) {
+                            e.stopPropagation();
+                            onSelectSlot(lineup.id, "boat", r, "right", null);
+                          }
+                        }}
+                      />
+                    )}
+                  </div>
+                </div>
+              ))}
+              <div className="flex justify-center mt-2">
+                <div className="w-[120px]">
+                  {lineup.boat.steers ? (
+                    <PlayerCard
+                      player={lineup.boat.steers}
+                      isSelected={
+                        selectedSource?.data?.id === lineup.boat.steers.id &&
+                        selectedSource?.lineupId === lineup.id
+                      }
+                      onClick={(e) => {
+                        if (!readOnly) {
+                          e.stopPropagation();
+                          onSelectSlot(
+                            lineup.id,
+                            "boat",
+                            0,
+                            "steers",
+                            lineup.boat.steers
+                          );
+                        }
+                      }}
+                      context="boat"
+                      showWeights={showWeights}
+                    />
+                  ) : (
+                    <EmptySlot
+                      label="舵手"
+                      isActive={selectedSource}
+                      onClick={(e) => {
+                        if (!readOnly) {
+                          e.stopPropagation();
+                          onSelectSlot(lineup.id, "boat", 0, "steers", null);
+                        }
+                      }}
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+            {!readOnly && (
+              <div
+                className={`py-2 px-3 text-xs font-bold flex justify-between items-center transition-colors cursor-pointer border-t ${
+                  isActive
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100 text-gray-400"
+                }`}
+                onClick={onClick}
+              >
+                {isActive ? (
+                  <>
+                    <span>正在編輯</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleSize(lineup.id);
+                      }}
+                      className="bg-blue-700 hover:bg-blue-800 px-2 py-0.5 rounded text-[10px] border border-blue-500"
+                    >
+                      {lineup.size === "small" ? "小龍 (5)" : "大龍 (10)"}
+                    </button>
+                  </>
+                ) : (
+                  <span className="w-full text-center">點擊選取編輯</span>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      };
+
+      function App() {
+        const [lineups, setLineups] = useState([DEFAULT_LINEUP]);
+        const [roster, setRoster] = useState(INITIAL_ROSTER);
+        const [activeLineupId, setActiveLineupId] = useState("default");
+        const [scale, setScale] = useState(1);
+        const [isBenchOpen, setIsBenchOpen] = useState(false);
+        const [selectedSource, setSelectedSource] = useState(null);
+        const [showWeights, setShowWeights] = useState(true);
+        const [isScreenshotMode, setIsScreenshotMode] = useState(false);
+
+        // Modals & Popups
+        const [importModalOpen, setImportModalOpen] = useState(false);
+        const [projectModalOpen, setProjectModalOpen] = useState(false);
+        const [importText, setImportText] = useState("");
+        const [importPreview, setImportPreview] = useState([]);
+
+        // Delete Confirmation States
+        const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+        const [deleteTarget, setDeleteTarget] = useState(null); // { type: 'lineup' | 'project', id: ... }
+
+        // Project States
+        const [archives, setArchives] = useState([]);
+        const [newProjectName, setNewProjectName] = useState("");
+
+        // Persistence
+        useEffect(() => {
+          const savedData = localStorage.getItem("paddlePlannerData_v20");
+          const savedArchives = localStorage.getItem("paddlePlannerArchives");
+          if (savedData) {
+            try {
+              const parsed = JSON.parse(savedData);
+              if (parsed.lineups) {
+                setLineups(parsed.lineups);
+                if (parsed.lineups.length > 0)
+                  setActiveLineupId(parsed.lineups[0].id);
+              }
+              if (parsed.roster) setRoster(parsed.roster);
+            } catch (e) {}
+          } else {
+            // Try migrate v19
+            const oldData = localStorage.getItem("paddlePlannerData_v19");
+            if (oldData) {
+              try {
+                const p = JSON.parse(oldData);
+                if (p.lineups) setLineups(p.lineups);
+                if (p.roster) setRoster(p.roster);
+              } catch (e) {}
+            }
+          }
+          if (savedArchives) {
+            try {
+              setArchives(JSON.parse(savedArchives));
+            } catch (e) {}
+          }
+        }, []);
+
+        useEffect(() => {
+          localStorage.setItem(
+            "paddlePlannerData_v20",
+            JSON.stringify({ lineups, roster })
+          );
+        }, [lineups, roster]);
+
+        useEffect(() => {
+          localStorage.setItem(
+            "paddlePlannerArchives",
+            JSON.stringify(archives)
+          );
+        }, [archives]);
+
+        // --- Computed ---
+        const activeBoatUsedIds = useMemo(() => {
+          const activeLineup = lineups.find((l) => l.id === activeLineupId);
+          if (!activeLineup) return new Set();
+          const boat = activeLineup.boat;
+          const rowCount = activeLineup.size === "small" ? 5 : 10;
+          const ids = new Set();
+          if (boat.drummer) ids.add(boat.drummer.id);
+          if (boat.steers) ids.add(boat.steers.id);
+          for (let i = 0; i < rowCount; i++) {
+            if (boat.left[i]) ids.add(boat.left[i].id);
+            if (boat.right[i]) ids.add(boat.right[i].id);
+          }
+          return ids;
+        }, [lineups, activeLineupId]);
+
+        const sortedRoster = useMemo(() => {
+          return [...roster].sort((a, b) => {
+            const order = { L: 1, R: 2, B: 3 };
+            if (order[a.side] !== order[b.side])
+              return order[a.side] - order[b.side];
+            return b.weight - a.weight;
+          });
+        }, [roster]);
+
+        // --- Actions ---
+        const handleAddLineup = () => {
+          const newId = `lineup_${Date.now()}`;
+          setLineups([
+            ...lineups,
+            {
+              id: newId,
+              name: `組合 ${lineups.length + 1}`,
+              boat: EMPTY_BOAT,
+              size: "large",
+            },
+          ]);
+          setActiveLineupId(newId);
+        };
+
+        const handleDuplicate = (id) => {
+          const original = lineups.find((l) => l.id === id);
+          if (!original) return;
+          const newId = `lineup_${Date.now()}`;
+          setLineups((prev) => {
+            const idx = prev.findIndex((l) => l.id === id);
+            const next = [...prev];
+            next.splice(idx + 1, 0, {
+              ...original,
+              id: newId,
+              name: `${original.name} (複製)`,
+            });
+            return next;
+          });
+          setActiveLineupId(newId);
+        };
+
+        const handleDeleteClick = (id) => {
+          if (lineups.length <= 1) {
+            alert("至少保留一個組合");
+            return;
+          }
+          setDeleteTarget({ type: "lineup", id });
+          setDeleteModalOpen(true);
+        };
+
+        const handleProjectDeleteClick = (id) => {
+          setDeleteTarget({ type: "project", id });
+          setDeleteModalOpen(true);
+        };
+
+        const handleNewProjectClick = () => {
+          setDeleteTarget({ type: "new_project" }); // reusing modal for confirmation
+          setDeleteModalOpen(true);
+        };
+
+        const handleLoadProjectClick = (archive) => {
+          setDeleteTarget({ type: "load_project", payload: archive });
+          setDeleteModalOpen(true);
+        };
+
+        const confirmAction = () => {
+          if (!deleteTarget) return;
+          if (deleteTarget.type === "lineup") {
+            setLineups((prev) => {
+              const next = prev.filter((l) => l.id !== deleteTarget.id);
+              if (activeLineupId === deleteTarget.id)
+                setActiveLineupId(next[0].id);
+              return next;
+            });
+          } else if (deleteTarget.type === "project") {
+            setArchives((prev) => prev.filter((a) => a.id !== deleteTarget.id));
+          } else if (deleteTarget.type === "new_project") {
+            setLineups([DEFAULT_LINEUP]);
+            setRoster(INITIAL_ROSTER);
+            setActiveLineupId("default");
+            setProjectModalOpen(false);
+          } else if (deleteTarget.type === "load_project") {
+            const archive = deleteTarget.payload;
+            setLineups(archive.lineups);
+            setRoster(archive.roster);
+            setActiveLineupId(archive.lineups[0]?.id || "default");
+            setProjectModalOpen(false);
+          }
+          setDeleteModalOpen(false);
+          setDeleteTarget(null);
+        };
+
+        const handleUpdateLineup = (updated) =>
+          setLineups((prev) =>
+            prev.map((l) => (l.id === updated.id ? updated : l))
+          );
+        const handleToggleSize = (id) =>
+          setLineups((prev) =>
+            prev.map((l) =>
+              l.id !== id
+                ? l
+                : { ...l, size: l.size === "small" ? "large" : "small" }
+            )
+          );
+
+        const handleInteract = (lineupId, type, index, side, data) => {
+          if (isScreenshotMode) return;
+          if (type === "boat" && lineupId) setActiveLineupId(lineupId);
+
+          if (
+            selectedSource &&
+            selectedSource.data?.id === data?.id &&
+            selectedSource.type === type
+          ) {
+            setSelectedSource(null);
+            return;
+          }
+
+          if (selectedSource) {
+            const targetLocation = {
+              type,
+              lineupId: lineupId || activeLineupId,
+              index,
+              side,
             };
+            executeMove(selectedSource, targetLocation, data);
+          } else {
+            if (data) {
+              setSelectedSource({
+                type,
+                lineupId: lineupId || activeLineupId,
+                index,
+                side,
+                data,
+              });
+              if (type === "roster") setIsBenchOpen(false);
+            }
+          }
+        };
 
-            const EmptySlot = ({ label, onClick, isActive }) => (
-                <div onClick={onClick} className={`h-[20px] rounded border border-dashed flex items-center justify-center text-[10px] text-gray-300 font-medium transition-colors cursor-pointer ${isActive ? 'border-blue-400 bg-blue-50 text-blue-600' : 'border-gray-200'}`}>
-                    {label}
-                </div>
+        const executeMove = (source, target, targetData) => {
+          const newLineups = JSON.parse(JSON.stringify(lineups));
+          const setPlayer = (lId, idx, s, p) => {
+            const l = newLineups.find((x) => x.id === lId);
+            if (!l) return;
+            if (s === "drummer") l.boat.drummer = p;
+            else if (s === "steers") l.boat.steers = p;
+            else if (s === "left") l.boat.left[idx] = p;
+            else if (s === "right") l.boat.right[idx] = p;
+          };
+
+          if (source.type === "roster" && target.type === "boat") {
+            setPlayer(
+              target.lineupId,
+              target.index,
+              target.side,
+              source.data
             );
-
-            return (
-                <div className="flex flex-col h-screen bg-gray-50 font-sans overflow-hidden">
-                    
-                    {/* --- Top Bar --- */}
-                    <div className="bg-white border-b border-gray-200 px-2 pt-2 flex gap-1 overflow-x-auto no-scrollbar shrink-0 h-[38px] items-end">
-                        {lineups.map(l => (
-                            <button
-                                key={l.id}
-                                onClick={() => setActiveLineupId(l.id)}
-                                className={`px-2 py-1 text-[11px] font-bold rounded-t-lg whitespace-nowrap border-t border-l border-r relative top-[1px] ${activeLineupId === l.id ? 'bg-gray-100 text-blue-700 border-gray-300 z-10' : 'bg-gray-50 text-gray-400 border-transparent hover:bg-gray-100'}`}
-                            >
-                                {l.name}
-                            </button>
-                        ))}
-                        <button onClick={handleAddLineup} className="p-1 mb-1 text-gray-400 hover:text-blue-600"><Plus size={14} /></button>
-                    </div>
-
-                    {/* --- Sub Header --- */}
-                    <div className="bg-gray-100 px-2 py-1.5 shadow-sm shrink-0">
-                        <div className="flex justify-between items-center mb-1.5">
-                            <div className="flex items-center gap-2">
-                                {isEditNameMode ? (
-                                    <input autoFocus className="text-xs font-bold bg-white border rounded px-1 w-24" value={currentLineup.name} onChange={(e) => updateLineupName(e.target.value)} onBlur={() => setIsEditNameMode(false)} />
-                                ) : (
-                                    <span onClick={() => setIsEditNameMode(true)} className="text-xs font-bold text-gray-800 border-b border-dashed border-gray-400 cursor-text">{currentLineup.name}</span>
-                                )}
-                            </div>
-                            <div className="flex gap-1.5">
-                                <button onClick={() => setImportModalOpen(true)} className="p-1.5 bg-white rounded border border-gray-300 text-gray-600 shadow-sm hover:bg-gray-50" title="匯入名單"><FileSpreadsheet size={14} /></button>
-                                <button onClick={handleDuplicateLineup} className="p-1.5 bg-white rounded border border-gray-300 text-gray-600 shadow-sm hover:bg-gray-50" title="複製陣容"><Copy size={14} /></button>
-                                <button onClick={requestDeleteLineup} disabled={lineups.length <= 1} className={`p-1.5 bg-white rounded border border-gray-300 shadow-sm ${lineups.length <= 1 ? 'text-gray-300' : 'text-red-500 hover:bg-red-50'}`} title="刪除"><Trash2 size={14} /></button>
-                                <button onClick={handleCopyList} className={`p-1.5 text-white rounded border shadow-sm flex items-center gap-1 transition-colors ${copyFeedback ? 'bg-green-600 border-green-700' : 'bg-blue-600 border-blue-700 hover:bg-blue-700'}`} title="複製名單 (Excel)">
-                                    {copyFeedback ? <Check size={14} /> : <ClipboardCopy size={14} />}
-                                    <span className="text-[10px] font-bold">{copyFeedback ? "已複製" : "Excel"}</span>
-                                </button>
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                            <div className="bg-white rounded p-1 flex items-center justify-between shadow-sm border border-gray-200 h-6">
-                                <div className="text-[9px] text-center w-1/3 text-blue-600 font-bold flex gap-1 justify-center leading-none"><span>L</span><span>{stats.leftW}</span></div>
-                                <div className="text-[9px] text-center w-1/3 font-bold text-gray-500 flex items-center justify-center gap-1 leading-none">
-                                    {stats.diff !== 0 && (stats.diff > 0 ? <ArrowUp size={8} className="text-blue-500"/> : <ArrowDown size={8} className="text-red-500"/>)}
-                                    <span className={Math.abs(stats.diff) > 10 ? "text-red-500" : "text-gray-600"}>{Math.abs(stats.diff)}</span>
-                                </div>
-                                <div className="text-[9px] text-center w-1/3 text-red-600 font-bold flex gap-1 justify-center leading-none"><span>R</span><span>{stats.rightW}</span></div>
-                            </div>
-                            <div className="bg-white rounded p-1 px-2 flex items-center justify-between shadow-sm border border-gray-200 text-[10px] font-bold h-6">
-                                <span className="text-pink-600">女 {stats.femaleCount}</span>
-                                <span className="text-gray-300">|</span>
-                                <span className="text-blue-600">男 {stats.maleCount}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* --- Main Boat Area --- */}
-                    <div className="flex-1 overflow-y-auto p-2 pb-24 relative bg-white" onClick={() => setIsBenchOpen(false)}>
-                        <div className="absolute left-1/2 top-0 bottom-0 w-px bg-gray-100 -translate-x-1/2"></div>
-                        <div className="max-w-[340px] mx-auto space-y-2 mt-1">
-                            <div className="flex justify-center mb-1">
-                                <div className="w-[158px] relative">
-                                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 text-[8px] text-gray-300 font-bold">DRUMMER</div>
-                                    {boat.drummer ? <PlayerCard player={boat.drummer} isSelected={selectedSource?.data?.id === boat.drummer.id} onClick={(e) => { e.stopPropagation(); handleTapPlayer('boat', 0, 'drummer', boat.drummer); }} context="boat" /> : <EmptySlot label="鼓手" isActive={selectedSource} onClick={(e) => { e.stopPropagation(); handleTapEmptySlot('boat', 0, 'drummer'); }} />}
-                                </div>
-                            </div>
-                            {Array.from({ length: 10 }).map((_, rowIndex) => (
-                                <div key={rowIndex} className="flex items-center gap-3">
-                                    <div className="flex-1">
-                                        {boat.left[rowIndex] ? <PlayerCard player={boat.left[rowIndex]} isSelected={selectedSource?.data?.id === boat.left[rowIndex].id} onClick={(e) => { e.stopPropagation(); handleTapPlayer('boat', rowIndex, 'left', boat.left[rowIndex]); }} context="boat" sideConstraint="L" /> : <EmptySlot label={`左${rowIndex + 1}`} isActive={selectedSource} onClick={(e) => { e.stopPropagation(); handleTapEmptySlot('boat', rowIndex, 'left'); }} />}
-                                    </div>
-                                    <div className="w-3 text-center text-[8px] text-gray-300 font-bold">{rowIndex + 1}</div>
-                                    <div className="flex-1">
-                                        {boat.right[rowIndex] ? <PlayerCard player={boat.right[rowIndex]} isSelected={selectedSource?.data?.id === boat.right[rowIndex].id} onClick={(e) => { e.stopPropagation(); handleTapPlayer('boat', rowIndex, 'right', boat.right[rowIndex]); }} context="boat" sideConstraint="R" /> : <EmptySlot label={`右${rowIndex + 1}`} isActive={selectedSource} onClick={(e) => { e.stopPropagation(); handleTapEmptySlot('boat', rowIndex, 'right'); }} />}
-                                    </div>
-                                </div>
-                            ))}
-                            <div className="flex justify-center mt-2 mb-4">
-                                <div className="w-[158px] relative">
-                                    <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 text-[8px] text-gray-300 font-bold">STEERS</div>
-                                    {boat.steers ? <PlayerCard player={boat.steers} isSelected={selectedSource?.data?.id === boat.steers.id} onClick={(e) => { e.stopPropagation(); handleTapPlayer('boat', 0, 'steers', boat.steers); }} context="boat" /> : <EmptySlot label="舵手" isActive={selectedSource} onClick={(e) => { e.stopPropagation(); handleTapEmptySlot('boat', 0, 'steers'); }} />}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* --- Drawer (Bench) --- */}
-                    <div className={`fixed bottom-0 left-0 right-0 bg-white shadow-[0_-5px_20px_rgba(0,0,0,0.15)] z-40 rounded-t-xl border-t border-gray-200 transition-all duration-300 ease-in-out flex flex-col ${isBenchOpen ? 'h-[65vh]' : 'h-[40px]'}`}>
-                        <div className="h-[40px] flex items-center justify-between px-3 cursor-pointer bg-white rounded-t-xl shrink-0 hover:bg-gray-50" onClick={() => setIsBenchOpen(!isBenchOpen)}>
-                            <div className="flex items-center gap-2">
-                                <div className="bg-gray-100 p-0.5 rounded-full">{isBenchOpen ? <ChevronDown size={14}/> : <ChevronUp size={14} />}</div>
-                                <span className="font-bold text-gray-700 text-xs">待命板凳 ({getBenchPlayers().length})</span>
-                            </div>
-                            {selectedSource && selectedSource.type === 'boat' && <button onClick={(e) => { e.stopPropagation(); handleKickToBench(); }} className="bg-red-50 text-red-600 text-[9px] px-2 py-1 rounded border border-red-200">移回板凳</button>}
-                        </div>
-                        <div className="flex-1 overflow-y-auto p-3 bg-slate-50 border-t border-gray-100">
-                            <div className="grid grid-cols-3 gap-x-3 gap-y-3 pb-safe">
-                                {getBenchPlayers().map(player => (
-                                    <PlayerCard key={player.id} player={player} isSelected={selectedSource?.data?.id === player.id} onClick={(e) => { e.stopPropagation(); handleTapPlayer('roster', 0, null, player); }} context="bench" />
-                                ))}
-                                {getBenchPlayers().length === 0 && <div className="col-span-3 text-center text-gray-400 py-10 text-xs">全員上船！</div>}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* --- Import Modal (Enhanced V11) --- */}
-                    {importModalOpen && (
-                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                            <div className="bg-white rounded-lg shadow-xl p-4 w-full max-w-sm animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
-                                <div className="flex justify-between items-center mb-3 flex-none">
-                                    <h3 className="font-bold text-gray-800 text-sm">匯入名單</h3>
-                                    <button onClick={() => setImportModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X size={16}/></button>
-                                </div>
-                                <div className="text-[10px] text-gray-400 mb-2 bg-gray-50 p-2 rounded flex-none">
-                                    格式：名字 角色(左/右/雙/舵/鼓) 性別 體重<br/>
-                                    支援：空格、逗號、TAB、Excel 貼上
-                                </div>
-                                <textarea 
-                                    className="w-full h-24 border border-gray-300 rounded p-2 text-xs mb-2 font-mono flex-none"
-                                    placeholder="範例：王小明 左槳 男 75"
-                                    value={importText}
-                                    onChange={(e) => setImportText(e.target.value)}
-                                />
-                                
-                                {/* Live Preview Section */}
-                                <div className="flex-1 min-h-0 border border-gray-100 rounded mb-3 overflow-y-auto bg-slate-50">
-                                    {importPreview.length > 0 ? (
-                                        <table className="w-full text-[10px] text-left">
-                                            <thead className="bg-gray-100 sticky top-0">
-                                                <tr>
-                                                    <th className="p-1 pl-2">名字</th>
-                                                    <th className="p-1">位置</th>
-                                                    <th className="p-1">性別</th>
-                                                    <th className="p-1">體重</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {importPreview.map((p, i) => (
-                                                    <tr key={i} className="border-b border-gray-100 last:border-0">
-                                                        <td className="p-1 pl-2 font-bold">{p.name}</td>
-                                                        <td className="p-1">
-                                                            <span className={`px-1 rounded text-white ${p.side==='L'?'bg-blue-400':p.side==='R'?'bg-red-400':'bg-purple-400'}`}>
-                                                                {p.side==='L'?'左':p.side==='R'?'右':'雙'}
-                                                            </span>
-                                                        </td>
-                                                        <td className="p-1">{p.gender==='M'?'男':'女'}</td>
-                                                        <td className="p-1">{p.weight}kg</td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    ) : (
-                                        <div className="h-full flex items-center justify-center text-gray-400 text-xs p-4">
-                                            {importText ? "無法解析，請檢查格式" : "預覽區域"}
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="flex gap-2 flex-none">
-                                    <button onClick={() => setImportModalOpen(false)} className="px-3 py-2 text-xs font-medium text-gray-600 bg-gray-100 rounded hover:bg-gray-200">取消</button>
-                                    <button 
-                                        onClick={() => handleImportSubmit('append')} 
-                                        disabled={importPreview.length === 0}
-                                        className="flex-1 py-2 text-xs font-bold text-white bg-green-600 rounded hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
-                                    >
-                                        新增 ({importPreview.length}人)
-                                    </button>
-                                    <button 
-                                        onClick={() => handleImportSubmit('overwrite')} 
-                                        disabled={importPreview.length === 0}
-                                        className="flex-1 py-2 text-xs font-bold text-white bg-red-600 rounded hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
-                                    >
-                                        覆蓋
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* --- Delete Modal --- */}
-                    {deleteModalOpen && (
-                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                            <div className="bg-white rounded-lg shadow-xl p-5 w-full max-w-xs animate-in zoom-in-95 duration-200">
-                                <div className="flex justify-between items-center mb-4">
-                                    <h3 className="font-bold text-gray-800 text-base">確認刪除</h3>
-                                    <button onClick={() => setDeleteModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X size={18}/></button>
-                                </div>
-                                <p className="text-xs text-gray-600 mb-6 leading-relaxed">確定要刪除 <span className="font-bold text-gray-900">{currentLineup.name}</span> 嗎？<br/>此動作無法復原。</p>
-                                <div className="flex gap-2">
-                                    <button onClick={() => setDeleteModalOpen(false)} className="flex-1 py-2 text-xs font-medium text-gray-600 bg-gray-100 rounded hover:bg-gray-200">取消</button>
-                                    <button onClick={confirmDeleteLineup} className="flex-1 py-2 text-xs font-bold text-white bg-red-600 rounded hover:bg-red-700 shadow-sm">確認刪除</button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </div>
+          } else if (source.type === "boat" && target.type === "boat") {
+            setPlayer(
+              source.lineupId,
+              source.index,
+              source.side,
+              targetData
             );
+            setPlayer(target.lineupId, target.index, target.side, source.data);
+          }
+          setLineups(newLineups);
+          setSelectedSource(null);
+        };
+
+        const handleKickToBench = () => {
+          if (!selectedSource || selectedSource.type !== "boat") return;
+          const newLineups = JSON.parse(JSON.stringify(lineups));
+          const l = newLineups.find((x) => x.id === selectedSource.lineupId);
+          if (l) {
+            if (selectedSource.side === "drummer") l.boat.drummer = null;
+            else if (selectedSource.side === "steers") l.boat.steers = null;
+            else if (selectedSource.side === "left")
+              l.boat.left[selectedSource.index] = null;
+            else if (selectedSource.side === "right")
+              l.boat.right[selectedSource.index] = null;
+          }
+          setLineups(newLineups);
+          setSelectedSource(null);
+        };
+
+        const saveProject = () => {
+          const name =
+            newProjectName.trim() || new Date().toISOString().split("T")[0];
+          const newArchive = {
+            id: Date.now(),
+            name: name,
+            date: new Date().toLocaleString(),
+            lineups: lineups,
+            roster: roster,
+          };
+          setArchives([newArchive, ...archives]);
+          setNewProjectName("");
+          alert("存檔成功！");
+        };
+
+        const parseCSV = (text) => {
+          const lines = text.split(/\r?\n/).filter((l) => l.trim() !== "");
+          return lines
+            .map((line, idx) => {
+              if (idx === 0 && (line.includes("名字") || line.includes("Name")))
+                return null;
+              const cols = line.split(/[,，、\t|;\s]+/).filter((c) => c.trim() !== "");
+              if (cols.length < 2) return null;
+              const name = cols[0];
+              const rest = cols.slice(1).join(" ").toLowerCase();
+              let side = "B",
+                gender = "M",
+                weight = 0;
+              if (rest.match(/左|left|l/)) side = "L";
+              else if (rest.match(/右|right|r/)) side = "R";
+              if (rest.match(/女|female|f/)) gender = "F";
+              const nums = rest.match(/\d+/g);
+              if (nums) {
+                const w = nums
+                  .map((n) => parseInt(n))
+                  .filter((n) => n >= 20 && n <= 200);
+                if (w.length > 0) weight = w[w.length - 1];
+              }
+              return {
+                id: `imp_${Date.now()}_${idx}`,
+                name,
+                side,
+                gender,
+                weight,
+              };
+            })
+            .filter(Boolean);
+        };
+
+        useEffect(() => {
+          if (importModalOpen && importText)
+            setImportPreview(parseCSV(importText));
+          else setImportPreview([]);
+        }, [importText, importModalOpen]);
+
+        const handleImportSubmit = (mode) => {
+          if (importPreview.length === 0) return;
+          localStorage.setItem(
+            "paddlePlanner_backup_roster",
+            JSON.stringify(roster)
+          );
+          if (mode === "overwrite") {
+            setLineups([DEFAULT_LINEUP]);
+            setRoster(importPreview);
+            setActiveLineupId("default");
+          } else {
+            setRoster((prev) => [...prev, ...importPreview]);
+          }
+          setImportModalOpen(false);
+          setImportText("");
+        };
+
+        // Render Screenshot Mode
+        if (isScreenshotMode) {
+          return (
+            <div className="min-h-screen bg-gray-900 p-8 flex flex-col items-center overflow-x-auto overflow-y-auto relative">
+              <div className="min-w-[600px] flex justify-center">
+                <div
+                  className={`grid gap-6 ${
+                    lineups.length === 1 ? "grid-cols-1" : "grid-cols-2"
+                  }`}
+                >
+                  {lineups.map((l) => (
+                    <div
+                      key={l.id}
+                      className={`${
+                        lineups.length === 1 ? "scale-125 origin-top" : ""
+                      }`}
+                    >
+                      <BoatCard
+                        lineup={l}
+                        isActive={false}
+                        onClick={() => {}}
+                        readOnly={true}
+                        showWeights={showWeights}
+                        onUpdate={() => {}}
+                        onDelete={() => {}}
+                        onDuplicate={() => {}}
+                        onSelectSlot={() => {}}
+                        onToggleSize={() => {}}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <button
+                onClick={() => setIsScreenshotMode(false)}
+                className="fixed bottom-8 right-8 bg-white/10 backdrop-blur text-white p-4 rounded-full shadow-lg hover:bg-white/20 border border-white/20 z-50"
+              >
+                <X size={24} />
+              </button>
+            </div>
+          );
         }
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        return (
+          <div className="flex flex-col h-full bg-gray-900 text-gray-100">
+            <div className="h-14 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-3 z-20 shadow-lg">
+              <div className="flex items-center gap-2 flex-1 mr-4">
+                <ZoomOut size={16} className="text-gray-400" />
+                <input
+                  type="range"
+                  min="0.5"
+                  max="1.1"
+                  step="0.1"
+                  value={scale}
+                  onChange={(e) => setScale(parseFloat(e.target.value))}
+                  className="flex-1"
+                />
+                <ZoomIn size={16} className="text-gray-400" />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowWeights(!showWeights)}
+                  className="p-2 bg-gray-700 rounded text-gray-300 hover:bg-gray-600"
+                >
+                  {showWeights ? <Eye size={18} /> : <EyeOff size={18} />}
+                </button>
+                <button
+                  onClick={() => setIsScreenshotMode(true)}
+                  className="p-2 bg-gray-700 rounded text-gray-300 hover:bg-gray-600"
+                >
+                  <Camera size={18} />
+                </button>
+                <button
+                  onClick={() => setProjectModalOpen(true)}
+                  className="p-2 bg-gray-700 rounded text-gray-300 hover:bg-gray-600"
+                >
+                  <FolderOpen size={18} />
+                </button>
+                <button
+                  onClick={() => setImportModalOpen(true)}
+                  className="p-2 bg-gray-700 rounded text-gray-300 hover:bg-gray-600"
+                >
+                  <FileSpreadsheet size={18} />
+                </button>
+                <button
+                  onClick={handleAddLineup}
+                  className="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded shadow hover:bg-blue-500 flex items-center gap-1"
+                >
+                  <Plus size={16} />
+                  新增
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-auto bg-gray-900 relative">
+              <div
+                className="flex gap-4 p-4 absolute top-0 left-0 origin-top-left transition-transform duration-200"
+                style={{
+                  transform: `scale(${scale})`,
+                  width: `${lineups.length * 300 + 100}px`,
+                }}
+              >
+                {lineups.map((lineup) => (
+                  <BoatCard
+                    key={lineup.id}
+                    lineup={lineup}
+                    isActive={activeLineupId === lineup.id}
+                    onClick={() => setActiveLineupId(lineup.id)}
+                    onUpdate={handleUpdateLineup}
+                    onDelete={handleDeleteClick}
+                    onDuplicate={handleDuplicate}
+                    onSelectSlot={handleInteract}
+                    selectedSource={selectedSource}
+                    onToggleSize={handleToggleSize}
+                    showWeights={showWeights}
+                  />
+                ))}
+                <div className="w-10 flex-shrink-0"></div>
+              </div>
+            </div>
+            <div
+              className={`fixed bottom-0 left-0 right-0 bg-white text-gray-900 shadow-[0_-5px_20px_rgba(0,0,0,0.5)] z-40 rounded-t-xl transition-all duration-300 flex flex-col ${
+                isBenchOpen ? "h-[60vh]" : "h-[50px]"
+              }`}
+            >
+              <div
+                className="h-[50px] flex items-center justify-between px-4 cursor-pointer bg-gray-100 rounded-t-xl shrink-0 border-b border-gray-200"
+                onClick={() => setIsBenchOpen(!isBenchOpen)}
+              >
+                <div className="flex items-center gap-2">
+                  {isBenchOpen ? (
+                    <ChevronDown size={16} />
+                  ) : (
+                    <ChevronUp size={16} />
+                  )}
+                  <div className="flex flex-col">
+                    <span className="font-bold text-sm">
+                      板凳區 ({sortedRoster.length})
+                    </span>
+                    <span className="text-[10px] text-blue-600 font-medium">
+                      當前編輯：
+                      {lineups.find((l) => l.id === activeLineupId)?.name ||
+                        "未選擇"}
+                    </span>
+                  </div>
+                </div>
+                {selectedSource && selectedSource.type === "boat" && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleKickToBench();
+                    }}
+                    className="bg-red-50 text-red-600 text-xs px-3 py-1.5 rounded border border-red-200 font-bold"
+                  >
+                    移回板凳
+                  </button>
+                )}
+              </div>
+              <div className="flex-1 overflow-y-auto p-3 bg-white">
+                <div className="grid grid-cols-3 gap-x-3 gap-y-3 pb-safe">
+                  {sortedRoster.map((player) => (
+                    <PlayerCard
+                      key={player.id}
+                      player={player}
+                      isSelected={selectedSource?.data?.id === player.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleInteract(null, "roster", 0, null, player);
+                      }}
+                      isUsedInActiveBoat={activeBoatUsedIds.has(player.id)}
+                      showWeights={showWeights}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+            {importModalOpen && (
+              <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+                <div className="bg-white rounded-lg shadow-xl p-4 w-full max-w-sm flex flex-col max-h-[80vh] text-gray-900">
+                  <div className="flex justify-between items-center mb-2">
+                    <h3 className="font-bold">匯入名單</h3>
+                    <button onClick={() => setImportModalOpen(false)}>
+                      <X size={20} />
+                    </button>
+                  </div>
+                  <div className="text-[10px] text-gray-500 mb-2">
+                    格式：名字 角色(左/右/雙/舵/鼓) 性別 體重
+                  </div>
+                  <textarea
+                    className="w-full h-24 border p-2 text-xs mb-2 font-mono rounded"
+                    placeholder="範例：王小明 左槳 男 75"
+                    value={importText}
+                    onChange={(e) => setImportText(e.target.value)}
+                  />
+                  <div className="flex-1 overflow-y-auto border rounded mb-2 bg-gray-50 min-h-0">
+                    {importPreview.length > 0 ? (
+                      <table className="w-full text-[10px] text-left">
+                        <thead className="bg-gray-100 sticky top-0">
+                          <tr>
+                            <th className="p-1 pl-2">姓名</th>
+                            <th className="p-1">位置</th>
+                            <th className="p-1">性別</th>
+                            <th className="p-1">體重</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {importPreview.map((p, i) => (
+                            <tr key={i} className="border-b border-gray-100">
+                              <td className="p-1 pl-2 font-bold">{p.name}</td>
+                              <td className="p-1">
+                                <span
+                                  className={`px-1 rounded text-white ${
+                                    p.side === "L"
+                                      ? "bg-blue-400"
+                                      : p.side === "R"
+                                      ? "bg-red-400"
+                                      : "bg-purple-400"
+                                  }`}
+                                >
+                                  {p.side === "L"
+                                    ? "左"
+                                    : p.side === "R"
+                                    ? "右"
+                                    : "雙"}
+                                </span>
+                              </td>
+                              <td className="p-1">
+                                {p.gender === "M" ? "男" : "女"}
+                              </td>
+                              <td className="p-1">{p.weight}kg</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <div className="text-center text-gray-400 text-xs p-4">
+                        預覽區
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setImportModalOpen(false)}
+                      className="px-3 py-2 text-xs bg-gray-100 rounded"
+                    >
+                      取消
+                    </button>
+                    <button
+                      onClick={() => handleImportSubmit("append")}
+                      disabled={!importPreview.length}
+                      className="flex-1 py-2 text-xs font-bold text-white bg-green-600 rounded disabled:opacity-50"
+                    >
+                      新增
+                    </button>
+                    <button
+                      onClick={() => handleImportSubmit("overwrite")}
+                      disabled={!importPreview.length}
+                      className="flex-1 py-2 text-xs font-bold text-white bg-red-600 rounded disabled:opacity-50"
+                    >
+                      覆蓋
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+            {projectModalOpen && (
+              <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+                <div className="bg-white rounded-lg shadow-xl p-4 w-full max-w-sm flex flex-col max-h-[80vh] text-gray-900">
+                  <div className="flex justify-between items-center mb-4 border-b pb-2">
+                    <h3 className="font-bold text-lg">專案管理</h3>
+                    <button onClick={() => setProjectModalOpen(false)}>
+                      <X size={20} />
+                    </button>
+                  </div>
+                  <div className="mb-6">
+                    <h4 className="text-xs font-bold text-gray-500 mb-2 uppercase">
+                      目前專案存檔
+                    </h4>
+                    <div className="flex gap-2">
+                      <input
+                        className="flex-1 border rounded px-2 py-1.5 text-sm"
+                        placeholder="輸入存檔名稱 (預設今日)"
+                        value={newProjectName}
+                        onChange={(e) => setNewProjectName(e.target.value)}
+                      />
+                      <button
+                        onClick={saveProject}
+                        className="bg-blue-600 text-white px-3 py-1.5 rounded text-sm font-bold shadow hover:bg-blue-700 flex items-center gap-1"
+                      >
+                        <Icon>
+                          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                          <polyline points="17 21 17 13 7 13 7 21" />
+                          <polyline points="7 3 7 8 15 8" />
+                        </Icon>
+                        儲存
+                      </button>
+                    </div>
+                    <button
+                      onClick={handleNewProjectClick}
+                      className="w-full mt-2 border border-gray-300 text-gray-700 py-1.5 rounded text-sm hover:bg-gray-50 flex items-center justify-center gap-1"
+                    >
+                      <Plus size={14} /> 開新空白專案
+                    </button>
+                  </div>
+                  <div className="flex-1 overflow-y-auto min-h-0 border-t pt-2">
+                    <h4 className="text-xs font-bold text-gray-500 mb-2 uppercase">
+                      已存檔案 ({archives.length})
+                    </h4>
+                    {archives.length === 0 ? (
+                      <div className="text-center text-gray-400 text-sm py-4">
+                        尚無存檔
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {archives.map((arch) => (
+                          <div
+                            key={arch.id}
+                            className="border rounded p-2 flex justify-between items-center bg-gray-50 hover:bg-blue-50 transition-colors"
+                          >
+                            <div className="overflow-hidden">
+                              <div className="font-bold text-sm truncate">
+                                {arch.name}
+                              </div>
+                              <div className="text-[10px] text-gray-500">
+                                {arch.date} · {arch.lineups.length} 組合 ·{" "}
+                                {arch.roster.length} 人
+                              </div>
+                            </div>
+                            <div className="flex gap-1 flex-shrink-0">
+                              <button
+                                onClick={() => handleLoadProjectClick(arch)}
+                                className="px-2 py-1 bg-white border border-gray-300 rounded text-xs hover:text-blue-600"
+                              >
+                                讀取
+                              </button>
+                              <button
+                                onClick={() => handleProjectDeleteClick(arch.id)}
+                                className="p-1 text-gray-400 hover:text-red-500"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+            {deleteModalOpen && (
+              <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                <div className="bg-white rounded-lg shadow-xl p-5 w-full max-w-xs animate-in zoom-in-95 duration-200 text-gray-900">
+                  <h3 className="font-bold text-lg mb-2">
+                    {deleteTarget?.type === "project"
+                      ? "刪除存檔"
+                      : deleteTarget?.type === "new_project"
+                      ? "開新專案"
+                      : deleteTarget?.type === "load_project"
+                      ? "讀取舊檔"
+                      : "刪除組合"}
+                  </h3>
+                  <p className="text-xs text-gray-600 mb-6">
+                    {deleteTarget?.type === "project"
+                      ? "確定刪除此存檔？"
+                      : deleteTarget?.type === "new_project"
+                      ? "確定開新檔案？未儲存的資料將會遺失。"
+                      : deleteTarget?.type === "load_project"
+                      ? "確定載入舊檔？目前的未存檔資料將會遺失。"
+                      : "確定刪除此組合？"}
+                    <br />
+                    此動作無法復原。
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setDeleteModalOpen(false)}
+                      className="flex-1 py-2 text-xs font-medium text-gray-600 bg-gray-100 rounded"
+                    >
+                      取消
+                    </button>
+                    <button
+                      onClick={confirmAction}
+                      className="flex-1 py-2 text-xs font-bold text-white bg-red-600 rounded shadow-sm"
+                    >
+                      確認
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
     </script>
-</body>
+  </body>
 </html>
